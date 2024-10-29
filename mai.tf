@@ -3,7 +3,7 @@ provider "google" {
 }
 
 resource "google_compute_instance_template" "default" {
-  name           = "apache-instance-template"
+  name           = "apache-instance-template1"
   machine_type   = "e2-medium"
 
   disk {
@@ -22,7 +22,7 @@ resource "google_compute_instance_template" "default" {
   }
 
 resource "google_compute_instance_group_manager" "default" {
-  name               = "apache-instance-group"
+  name               = "apache-instance-group1"
   version {
     instance_template = google_compute_instance_template.default.id
   }
@@ -37,7 +37,7 @@ resource "google_compute_instance_group_manager" "default" {
 }
 
 resource "google_compute_backend_service" "default" {
-  name                  = "apache-backend-service"
+  name                  = "apache-backend-service1"
   backend {
     group = google_compute_instance_group_manager.default.instance_group
   }
@@ -49,7 +49,7 @@ resource "google_compute_backend_service" "default" {
 }
 
 resource "google_compute_http_health_check" "default" {
-  name                    = "apache-health-check"
+  name                    = "apache-health-check1"
   request_path            = "/"
   port                    = 80
   check_interval_sec      = 20
@@ -59,23 +59,23 @@ resource "google_compute_http_health_check" "default" {
 }
 
 resource "google_compute_url_map" "default" {
-  name            = "apache-url-map"
+  name            = "apache-url-map1"
   default_service = google_compute_backend_service.default.id
 }
 
 resource "google_compute_target_http_proxy" "default" {
-  name    = "apache-http-proxy"
+  name    = "apache-http-proxy1"
   url_map = google_compute_url_map.default.id
 }
 
 resource "google_compute_global_forwarding_rule" "default" {
-  name       = "apache-forwarding-rule"
+  name       = "apache-forwarding-rule1"
   target     = google_compute_target_http_proxy.default.id
   port_range = "80"
 }
 
 resource "google_compute_global_address" "lb_ip" {
-  name = "apache-lb-ip"
+  name = "apache-lb-ip1"
 }
 
 output "lb_external_ip" {
