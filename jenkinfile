@@ -1,0 +1,101 @@
+pipeline {
+    agent any
+    environment {
+        GOOGLE_APPLICATION_CREDENTIALS = credentials('gcp-sa')
+        
+    }
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/sgandeplli/loadbalancer.git'
+            }
+        }
+        stage('Terraform Init') {
+            steps {
+                sh 'terraform init'
+            }
+        }
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-sa', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh 'terraform apply -auto-approve'
+                }
+            }
+        }
+        stage('Wait for VM to be ready') {
+            steps {
+                sleep(time: 60, unit: "SECONDS")
+            }
+        }
+        stage('Fix Directory Permissions') {
+            steps {
+                sh 'chmod 755 /var/lib/jenkins/workspace/loadbalancer'
+            }
+        }
+
+        stage('Generate and Update Ansible Inventory') {
+            steps {
+                script {
+                    // Capture the JSON output and parse it
+                    def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
+                    def vmIps = readJSON text: vmIpJson
+
+                    // Create inventory content with multiple hosts
+                    def inventoryContent = """
+                    all:
+                      children:
+                        web:
+                          hosts:
+                    """
+
+                    // Iterate over the IPs and append to inventory content
+                    for (int i = 0; i < vmIps.size(); i++) {
+                        inventoryContent += """
+                              web_ansible-${i + 1}:
+                                ansible_host: ${vmIps[i]}
+                                ansible_user: centos
+                                ansible_ssh_private_key_file: /root/.ssh/id_rsa
+                        """
+                    }
+
+                    // Write the inventory content to the file
+                    writeFile file: '/var/lib/jenkins/workspace/loadbalancer/inventory.gcp.yml', text: inventoryContent
+                }
+            }
+        }
+
+stage('Cleanup known_hosts') {
+            steps {
+                script {
+                    def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
+                    def vmIps = readJSON text: vmIpJson
+
+                    // Debugging output for the retrieved IPs
+                    echo "Cleaning up known_hosts for the following IPs: ${vmIps}"
+
+                    // Remove old entries for each IP
+                    for (String ip : vmIps) {
+                        def result = sh(script: "ssh-keygen -R ${ip} || true", returnStatus: true)
+                        if (result == 0) {
+                            echo "Successfully removed known_hosts entry for IP: ${ip}"
+                        } else {
+                            echo "Failed to remove known_hosts entry for IP: ${ip} (may not exist)"
+                        }
+                    }
+
+                    // Now add the new host keys
+                    for (String ip : vmIps) {
+                        echo "Adding new host key for IP: ${ip}"
+                        sh "ssh-keyscan -H ${ip} >> /root/.ssh/known_hosts || true"
+                    }
+                }
+            }
+        }
+
+        stage('Install Apache using Ansible') {
+            steps {
+                sh 'ansible-playbook -i /var/lib/jenkins/workspace/loadbalancer/inventory.gcp.yml /var/lib/jenkins/workspace/loadbalancer/apache_install.yml'
+            }
+        }
+    }
+}
