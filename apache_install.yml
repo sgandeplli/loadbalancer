@@ -1,0 +1,15 @@
+---
+- name: Install Apache on GCP VM
+  hosts: web
+  become: yes
+  tasks:
+    - name: Install Apache
+      yum:
+        name: httpd
+        state: present
+
+    - name: Start and enable Apache
+      service:
+        name: httpd
+        state: started
+        enabled: yes
