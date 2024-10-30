@@ -20,6 +20,10 @@ resource "google_compute_instance_template" "default" {
     ssh-keys = "centos:${file("/root/.ssh/id_rsa.pub")}"
     }
   }
+  output "ssh_key" {
+    value = file("/root/.ssh/id_rsa.pub")
+  }
+
 
 resource "google_compute_instance_group_manager" "default" {
   name               = "apache-instance-group1"
@@ -98,6 +102,7 @@ resource "google_compute_instance" "centos_vm" {
     network = "default"
     access_config {}
   }
+tags = ["http-server"]
 }
 
 output "vm_ips" {
