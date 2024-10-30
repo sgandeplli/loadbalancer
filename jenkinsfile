@@ -2,12 +2,12 @@ pipeline {
     agent any
     environment {
         GOOGLE_APPLICATION_CREDENTIALS = credentials('gcp-sa')
-        
+        ANSIBLE_CONFIG = '/var/lib/jenkins/workspace/loadbalancer/ansible.cfg'
     }
     stages {
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/sgandeplli/loadbalancer.git'
+                git branch: 'main', url: 'https://github.com/aniljeenapati/project2.git'
             }
         }
         stage('Terraform Init') {
@@ -32,7 +32,6 @@ pipeline {
                 sh 'chmod 755 /var/lib/jenkins/workspace/loadbalancer'
             }
         }
-
         stage('Generate and Update Ansible Inventory') {
             steps {
                 script {
@@ -57,53 +56,11 @@ pipeline {
                                 ansible_ssh_private_key_file: /var/lib/jenkins/.ssh/id_rsa
                         """
                     }
-
-                    // Write the inventory content to the file
+                    // Write inventory content to the file
                     writeFile file: '/var/lib/jenkins/workspace/loadbalancer/inventory.gcp.yml', text: inventoryContent
                 }
             }
         }
-      stage('Add Host Key') {
-    steps {
-        script {
-            def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
-            def vmIps = readJSON text: vmIpJson
-
-            for (int i = 0; i < vmIps.size(); i++) {
-                sh "ssh-keyscan -H ${vmIps[i]} >> /var/lib/jenkins/.ssh/known_hosts || true"
-            }
-        }
-    }
-}  
-
-/*
-stage('Cleanup known_hosts11') {
-    steps {
-        script {
-            // Retrieve the VM IPs in JSON format
-            def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
-            def vmIps = readJSON text: vmIpJson
-
-            // Debugging output for the retrieved IPs
-            echo "Cleaning up known_hosts for the following IPs: ${vmIps}"
-
-            // Remove old entries for each IP
-            for (String ip : vmIps) {
-                // Attempt to remove the known_hosts entry for the current IP
-                def result = sh(script: "ssh-keygen -R ${ip} || true", returnStatus: true)
-                
-                // Optional: Log the result for each IP removal
-                if (result == 0) {
-                    echo "Successfully removed known_hosts entry for IP: ${ip}"
-                } else {
-                    echo "Failed to remove known_hosts entry for IP: ${ip} (may not exist)"
-                }
-            }
-        }
-    }
-}
-*/
-
         stage('Install Apache using Ansible') {
             steps {
                 sh 'ansible-playbook -i /var/lib/jenkins/workspace/loadbalancer/inventory.gcp.yml /var/lib/jenkins/workspace/loadbalancer/apache_install.yml'
@@ -111,3 +68,4 @@ stage('Cleanup known_hosts11') {
         }
     }
 }
+
