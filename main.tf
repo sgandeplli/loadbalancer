@@ -3,8 +3,9 @@ provider "google" {
 }
 
 resource "google_compute_instance_template" "default" {
-  name           = "apache-instance-template1"
+  name           = "apache-instance-template"
   machine_type   = "e2-medium"
+  region         = "us-central1"
 
   disk {
     auto_delete  = true
@@ -16,17 +17,14 @@ resource "google_compute_instance_template" "default" {
     network = "default"
     access_config {}
   }
-  metadata = {
-    ssh-keys = "centos:${file("/root/.ssh/id_rsa.pub")}"
-    }
-  }
-  output "ssh_key" {
-    value = file("/root/.ssh/id_rsa.pub")
-  }
-
+  metadata_startup_script = <<-EOF
+    #!/bin/bash
+    sudo systemctl start sshd
+    EOF
+}
 
 resource "google_compute_instance_group_manager" "default" {
-  name               = "apache-instance-group1"
+  name               = "apache-instance-group"
   version {
     instance_template = google_compute_instance_template.default.id
   }
@@ -41,19 +39,19 @@ resource "google_compute_instance_group_manager" "default" {
 }
 
 resource "google_compute_backend_service" "default" {
-  name                  = "apache-backend-service1"
+  name          = "apache-backend-service"
   backend {
     group = google_compute_instance_group_manager.default.instance_group
   }
-  health_checks         = [google_compute_http_health_check.default.id]
-  port_name             = "http"
-  protocol              = "HTTP"
-  timeout_sec           = 30
+  health_checks = [google_compute_http_health_check.default.id]
+  port_name     = "http"
+  protocol      = "HTTP"
+  timeout_sec   = 30
   load_balancing_scheme = "EXTERNAL"
 }
 
 resource "google_compute_http_health_check" "default" {
-  name                    = "apache-health-check1"
+  name                    = "apache-health-check"
   request_path            = "/"
   port                    = 80
   check_interval_sec      = 20
@@ -63,55 +61,24 @@ resource "google_compute_http_health_check" "default" {
 }
 
 resource "google_compute_url_map" "default" {
-  name            = "apache-url-map1"
+  name            = "apache-url-map"
   default_service = google_compute_backend_service.default.id
 }
 
 resource "google_compute_target_http_proxy" "default" {
-  name    = "apache-http-proxy1"
+  name    = "apache-http-proxy"
   url_map = google_compute_url_map.default.id
 }
 
 resource "google_compute_global_forwarding_rule" "default" {
-  name       = "apache-forwarding-rule1"
+  name       = "apache-forwarding-rule"
   target     = google_compute_target_http_proxy.default.id
   port_range = "80"
 }
-
-resource "google_compute_global_address" "lb_ip" {
-  name = "apache-lb-ip1"
-}
-
-output "lb_external_ip" {
-  value = google_compute_global_address.lb_ip.address
-}
-
-resource "google_compute_instance" "centos_vm" {
-  count        = var.instance_count
-  name         = "sekhar-${count.index}"
-  machine_type = "e2-medium"
-  zone         = "us-central1-a"
-
-  boot_disk {
-    initialize_params {
-      image = "centos-cloud/centos-stream-9"
-    }
-  }
-
-  network_interface {
-    network = "default"
-    access_config {}
-  }
-tags = ["http-server"]
+data "google_compute_instance_group" "default" {
+  instance_group = google_compute_instance_group_manager.default.instance_group
 }
 
 output "vm_ips" {
-  value = [for instance in google_compute_instance.centos_vm : instance.network_interface[0].access_config[0].nat_ip]
+  value = [for instance in data.google_compute_instance_group.default.instances : instance.network_interface[0].access_config[0].nat_ip]
 }
-
-variable "instance_count" {
-  description = "The number of instances to create."
-  type        = number
-  default     = 2
-}
-
