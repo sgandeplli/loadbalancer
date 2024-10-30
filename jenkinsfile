@@ -63,6 +63,18 @@ pipeline {
                 }
             }
         }
+  stage('Add Host Key') {
+    steps {
+        script {
+            def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
+            def vmIps = readJSON text: vmIpJson
+
+            for (int i = 0; i < vmIps.size(); i++) {
+                sh "ssh-keyscan -H ${vmIps[i]} >> /root/.ssh/known_hosts || true"
+            }
+        }
+    }
+}  
 
 stage('Cleanup known_hosts') {
             steps {
