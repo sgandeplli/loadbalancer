@@ -63,7 +63,7 @@ pipeline {
                 }
             }
         }
-  stage('Add Host Key') {
+      stage('Add Host Key') {
     steps {
         script {
             def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
@@ -76,33 +76,32 @@ pipeline {
     }
 }  
 
-stage('Cleanup known_hosts') {
-            steps {
-                script {
-                    def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
-                    def vmIps = readJSON text: vmIpJson
 
-                    // Debugging output for the retrieved IPs
-                    echo "Cleaning up known_hosts for the following IPs: ${vmIps}"
+stage('Cleanup known_hosts11') {
+    steps {
+        script {
+            // Retrieve the VM IPs in JSON format
+            def vmIpJson = sh(script: "terraform output -json vm_ips", returnStdout: true).trim()
+            def vmIps = readJSON text: vmIpJson
 
-                    // Remove old entries for each IP
-                    for (String ip : vmIps) {
-                        def result = sh(script: "ssh-keygen -R ${ip} || true", returnStatus: true)
-                        if (result == 0) {
-                            echo "Successfully removed known_hosts entry for IP: ${ip}"
-                        } else {
-                            echo "Failed to remove known_hosts entry for IP: ${ip} (may not exist)"
-                        }
-                    }
+            // Debugging output for the retrieved IPs
+            echo "Cleaning up known_hosts for the following IPs: ${vmIps}"
 
-                    // Now add the new host keys
-                    for (String ip : vmIps) {
-                        echo "Adding new host key for IP: ${ip}"
-                        sh "ssh-keyscan -H ${ip} >> /root/.ssh/known_hosts || true"
-                    }
+            // Remove old entries for each IP
+            for (String ip : vmIps) {
+                // Attempt to remove the known_hosts entry for the current IP
+                def result = sh(script: "ssh-keygen -R ${ip} || true", returnStatus: true)
+                
+                // Optional: Log the result for each IP removal
+                if (result == 0) {
+                    echo "Successfully removed known_hosts entry for IP: ${ip}"
+                } else {
+                    echo "Failed to remove known_hosts entry for IP: ${ip} (may not exist)"
                 }
             }
         }
+    }
+}
 
         stage('Install Apache using Ansible') {
             steps {
